@@ -1,0 +1,6 @@
+# .gitignore file for the project
+
+.ruff_cache/
+__pycache__/
+*.pyc
+

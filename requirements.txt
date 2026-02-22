@@ -1,0 +1,8 @@
+# Requirements for the project
+
+# Sense Hat
+sense-hat
+# Linter
+ruff
+# Environment variables
+python-dotenv
