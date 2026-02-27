@@ -1,56 +1,46 @@
 """
 main.py
 
-This is the entry point for the fall detection service on the Raspberry Pi.
-It ties everything together - reading from the sensor, checking for falls,
-and sending an alert to the backend if one is detected.
-
-The loop runs continuously at whatever interval is set in POLL_INTERVAL.
-I'm using 0.1 seconds (10 readings per second) as the default, which should
-be fast enough to catch the freefall and impact phases without overloading the Pi.
-
-Environment variables are loaded from a .env file (see .env.example).
-This keeps sensitive values like the API key out of the code and off GitHub.
+Entry point for the fall detection + ML feature pipeline.
 """
 
 import os
 import time
 import requests
 from dotenv import load_dotenv
+
 from sense_reader import get_reading
 from fall_logic import FallDetector
+from ml_feature_extractor import WindowFeatureExtractor
+from dataset_writer import DatasetWriter
 
-# load environment variables from the .env file
+
+# Load environment variables
 load_dotenv()
 
-BACKEND_URL    = os.getenv('BACKEND_URL', 'http://localhost:8080')
-DEVICE_API_KEY = os.getenv('DEVICE_API_KEY', '')
-DEVICE_ID      = os.getenv('DEVICE_ID', 'raspberry-pi-sense-hat')
-POLL_INTERVAL  = float(os.getenv('POLL_INTERVAL', '0.1'))
+BACKEND_URL    = os.getenv("BACKEND_URL", "http://localhost:8080")
+DEVICE_API_KEY = os.getenv("DEVICE_API_KEY", "")
+DEVICE_ID      = os.getenv("DEVICE_ID", "raspberry-pi")
+POLL_INTERVAL  = float(os.getenv("POLL_INTERVAL", "0.1"))
+
+# ML window settings
+SESSION_LABEL  = os.getenv("SESSION_LABEL", "normal")
+WINDOW_SECONDS = float(os.getenv("WINDOW_SECONDS", "1.0"))
+WINDOW_STEP    = float(os.getenv("WINDOW_STEP", "0.5"))
 
 ALERT_ENDPOINT = f"{BACKEND_URL}/api/alerts/fall"
 
 
 def send_alert(fall_result: dict):
-    """
-    Sends a POST request to the Spring Boot backend with the fall details.
-
-    I'm using a pre-shared API key in the request header (X-Device-Key)
-    instead of a user JWT because the Pi isn't a user - it's a device.
-    The backend checks this key before saving anything to the database.
-
-    I'm wrapping this in a try/except so that if the backend is unreachable
-    (e.g. laptop not on the same network), the Pi doesn't just crash -
-    it prints an error and keeps monitoring.
-    """
     payload = {
-        'deviceId':         DEVICE_ID,
-        'peakAcceleration': fall_result['peak_acceleration'],
-        'detectionPhase':   fall_result['detection_phase']
+        "deviceId": DEVICE_ID,
+        "peakAcceleration": fall_result["peak_acceleration"],
+        "detectionPhase": fall_result["detection_phase"],
     }
+
     headers = {
-        'Content-Type': 'application/json',
-        'X-Device-Key': DEVICE_API_KEY
+        "Content-Type": "application/json",
+        "X-Device-Key": DEVICE_API_KEY,
     }
 
     try:
@@ -58,13 +48,9 @@ def send_alert(fall_result: dict):
         if response.status_code == 200:
             print(f"[main] Alert sent successfully: {response.json()}")
         else:
-            print(f"[main] Backend returned an error: {response.status_code} {response.text}")
-    except requests.exceptions.ConnectionError:
-        print(f"[main] Couldn't reach the backend at {ALERT_ENDPOINT} - is Spring Boot running?")
-    except requests.exceptions.Timeout:
-        print("[main] Request timed out - backend took too long to respond.")
+            print(f"[main] Backend error: {response.status_code} {response.text}")
     except Exception as e:
-        print(f"[main] Something went wrong sending the alert: {e}")
+        print(f"[main] Failed to send alert: {e}")
 
 
 def main():
@@ -77,23 +63,59 @@ def main():
 
     detector = FallDetector()
 
+    # ML feature extractor setup
+    sample_rate_hz = 1.0 / POLL_INTERVAL
+    extractor = WindowFeatureExtractor(
+        window_seconds=WINDOW_SECONDS,
+        sample_rate_hz=sample_rate_hz
+    )
+
+    writer = DatasetWriter(out_dir="data")
+
+    print(f"[main] ML dataset file: {writer.path}")
+    print(f"[main] Session label: {SESSION_LABEL}")
+
+    last_window_write = 0.0
+
     try:
         while True:
             reading = get_reading()
+
+            # Feed reading into ML window buffer
+            extractor.add(reading)
+
+            # Normal session window writing
+            now = time.time()
+            if (
+                SESSION_LABEL == "normal"
+                and extractor.ready()
+                and (now - last_window_write) >= WINDOW_STEP
+            ):
+                row = extractor.extract(label="normal")
+                if row:
+                    writer.write(row)
+                    last_window_write = now
+
+            # Rule-based fall detection
             result = detector.update(reading)
 
-            # if update() returns something, a fall was confirmed
-            if result and result.get('detected'):
+            if result and result.get("detected"):
                 print("\n  FALL DETECTED - sending alert...")
+
+                # Write fall window
+                if extractor.ready():
+                    fall_row = extractor.extract(label="fall")
+                    if fall_row:
+                        writer.write(fall_row)
+
                 send_alert(result)
                 print("Resuming monitoring...\n")
 
             time.sleep(POLL_INTERVAL)
 
     except KeyboardInterrupt:
-        # Ctrl+C to stop - useful when testing
         print("\n[main] Stopped.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

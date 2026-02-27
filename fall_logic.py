@@ -22,9 +22,9 @@ from datetime import datetime
 # these thresholds are in g (gravitational units)
 FREE_FALL_THRESHOLD = 0.4    # if magnitude drops below this, could be freefall
 IMPACT_THRESHOLD    = 2.0    # if magnitude spikes above this, likely an impact
-STILLNESS_MIN       = 0.8    # stillness range - close to 1g means lying still
-STILLNESS_MAX       = 1.2
-STILLNESS_DURATION  = 2.0    # how many seconds of stillness before I confirm a fall
+STILLNESS_MIN       = 0.7    # stillness range - close to 1g means lying still
+STILLNESS_MAX       = 1.3
+STILLNESS_DURATION  = 1.0    # how many seconds of stillness before I confirm a fall
 
 # where the CSV log gets saved
 LOG_DIR  = os.path.join(os.path.dirname(__file__), 'data')
@@ -96,7 +96,7 @@ class FallDetector:
 
         # if freefall doesn't lead to impact within this time, reset
         # stops things like slowly bending down from triggering it
-        self._phase_timeout = 2.0
+        self._phase_timeout = 3.0
 
     def update(self, reading: dict) -> dict | None:
         """
@@ -114,7 +114,6 @@ class FallDetector:
                 self._state = 'FREEFALL_DETECTED'
                 self._phase_start_time = now
                 self._peak_acceleration = mag
-                print(f"[FallDetector] Freefall detected (magnitude: {mag:.2f}g)")
 
         elif self._state == 'FREEFALL_DETECTED':
             log_reading(reading, 'freefall')
@@ -133,6 +132,7 @@ class FallDetector:
 
         elif self._state == 'IMPACT_DETECTED':
             log_reading(reading, 'impact')
+            print(f"[FallDetector] Impact phase mag={mag:.2f}g")
 
             # keep updating peak in case it gets even higher during impact
             if mag > self._peak_acceleration:
