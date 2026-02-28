@@ -102,11 +102,13 @@ def main():
             if result and result.get("detected"):
                 print("\n  FALL DETECTED - sending alert...")
 
-                # Write fall window
-                if extractor.ready():
-                    fall_row = extractor.extract(label="fall")
-                    if fall_row:
-                        writer.write(fall_row)
+                for _ in range(3):
+                    # Write fall window
+                    if extractor.ready():
+                        fall_row = extractor.extract(label="fall")
+                        if fall_row:
+                            writer.write(fall_row)
+                    time.sleep(WINDOW_STEP)
 
                 send_alert(result)
                 print("Resuming monitoring...\n")
