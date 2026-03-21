@@ -19,11 +19,11 @@ Logging and ML feature generation are handled separately.
 #from datetime import datetime
 
 # these thresholds are in g (gravitational units)
-FREE_FALL_THRESHOLD = 0.4    # if magnitude drops below this, could be freefall
-IMPACT_THRESHOLD    = 2.0    # if magnitude spikes above this, likely an impact
-STILLNESS_MIN       = 0.7    # stillness range - close to 1g means lying still
-STILLNESS_MAX       = 1.3
-STILLNESS_DURATION  = 1.0    # how many seconds of stillness before I confirm a fall
+FREE_FALL_THRESHOLD = 0.6    # if magnitude drops below this, could be freefall
+IMPACT_THRESHOLD    = 1.9    # if magnitude spikes above this, likely an impact
+STILLNESS_MIN       = 0.8    # stillness range - close to 1g means lying still
+STILLNESS_MAX       = 1.2
+STILLNESS_DURATION  = 0.8    # how many seconds of stillness before I confirm a fall
 
 # where the CSV log gets saved
 #LOG_DIR  = os.path.join(os.path.dirname(__file__), 'data')
