@@ -1,4 +1,4 @@
-# SmartGuardian – Raspberry Pi Fall Detection Module
+# SmartGuardian - Raspberry Pi Fall Detection Module
 
 ## Overview
 
@@ -97,3 +97,9 @@ pi-fall-detector/
 └── data/
     └── ml_windows_<timestamp>.csv  # generated at runtime
 ```
+
+## Author
+
+Louise Deeth  
+BSc (Hons) Software Development  
+Atlantic Technological University
