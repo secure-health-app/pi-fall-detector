@@ -43,14 +43,35 @@ def send_alert(fall_result: dict):
         "X-Device-Key": DEVICE_API_KEY,
     }
 
-    try:
-        response = requests.post(ALERT_ENDPOINT, json=payload, headers=headers, timeout=5)
-        if response.status_code == 200:
-            print(f"[main] Alert sent successfully: {response.json()}")
-        else:
-            print(f"[main] Backend error: {response.status_code} {response.text}")
-    except Exception as e:
-        print(f"[main] Failed to send alert: {e}")
+    max_retries = 3
+
+    for attempt in range(max_retries):
+        try:
+            print(f"[main] Sending alert (attempt {attempt + 1})...")
+
+            response = requests.post(
+                ALERT_ENDPOINT,
+                json=payload,
+                headers=headers,
+                timeout=(5, 20)
+            )
+
+            if response.status_code == 200:
+                print(f"[main] Alert sent successfully: {response.json()}")
+                return
+            else:
+                print(f"[main] Backend error: {response.status_code} {response.text}")
+
+        except requests.exceptions.Timeout:
+            print("[main] Timeout - backend may be waking up (Render cold start)")
+
+        except Exception as e:
+            print(f"[main] Failed to send alert: {e}")
+
+        # wait before retrying
+        time.sleep(3)
+
+    print("[main] ❌ All retry attempts failed. Alert not delivered.")
 
 
 def main():
