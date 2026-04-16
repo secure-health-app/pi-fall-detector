@@ -30,6 +30,8 @@ WINDOW_STEP    = float(os.getenv("WINDOW_STEP", "0.5"))
 
 ALERT_ENDPOINT = f"{BACKEND_URL}/api/alerts/fall"
 
+DETECTION_COOLDOWN = float(os.getenv("DETECTION_COOLDOWN", "8.0"))
+ALERT_COOLDOWN     = float(os.getenv("ALERT_COOLDOWN", "30.0"))
 
 def send_alert(fall_result: dict):
     payload = {
@@ -67,7 +69,7 @@ def send_alert(fall_result: dict):
 
         except Exception as e:
             print(f"[main] Failed to send alert: {e}")
-
+ 
         # wait before retrying
         time.sleep(3)
 
@@ -98,6 +100,9 @@ def main():
 
     last_window_write = 0.0
 
+    last_detection_time = 0.0
+    last_alert_time = 0.0
+
     try:
         while True:
             reading = get_reading()
@@ -106,25 +111,40 @@ def main():
             extractor.add(reading)
 
             # Normal session window writing
-            now = time.time()
+            current_time = time.time()
             if (
                 SESSION_LABEL == "normal"
                 and extractor.ready()
-                and (now - last_window_write) >= WINDOW_STEP
+                and (current_time - last_window_write) >= WINDOW_STEP
             ):
                 row = extractor.extract(label="normal")
                 if row:
                     writer.write(row)
-                    last_window_write = now
-
+                    last_window_write = current_time
+                                
             # Rule-based fall detection
             result = detector.update(reading)
 
             if result and result.get("detected"):
+                current_time = time.time()
+
+                # Block duplicate detections 
+                if current_time - last_detection_time < DETECTION_COOLDOWN:
+                    print("[main] Detection ignored (duplicate movement)")
+                    continue
+
+                # record detection time
+                last_detection_time = current_time
+
+                # Block alert spam
+                if current_time - last_alert_time < ALERT_COOLDOWN:
+                    print("[main] Fall detected but alert cooldown active - not sending alert")
+                    continue
+
+                # Process valid fall
                 print("\n  FALL DETECTED - sending alert...")
 
                 for _ in range(3):
-                    # Write fall window
                     if extractor.ready():
                         fall_row = extractor.extract(label="fall")
                         if fall_row:
@@ -132,6 +152,10 @@ def main():
                     time.sleep(WINDOW_STEP)
 
                 send_alert(result)
+
+                # record alert time
+                last_alert_time = current_time
+
                 print("Resuming monitoring...\n")
 
             time.sleep(POLL_INTERVAL)
