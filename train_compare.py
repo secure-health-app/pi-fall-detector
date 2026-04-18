@@ -120,7 +120,7 @@ print(summary.to_string())
 # Save best model by fall recall 
 # Fall recall is the most important metric - missing a fall is worse than a false alarm
 
-best_name = max(results, key=lambda r: (r["Fall Recall"], r["Fall F1"]))["Model"]
+best_name = max(results, key=lambda r: (r["Fall F1"], r["Fall Recall"]))["Model"]
 best_model, best_X_tr, _ = models[best_name]
 
 print(f"\nBest model by fall recall: {best_name}")
