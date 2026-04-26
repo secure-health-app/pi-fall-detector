@@ -1,3 +1,10 @@
+"""
+train_model.py
+
+Trains the Random Forest fall detection model
+using saved feature window CSV files.
+"""
+
 import glob
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -16,6 +23,7 @@ df = df[df["label"].isin(["normal", "fall"])].copy()
 print("Label counts:")
 print(df["label"].value_counts())
 
+# features used by the model
 feature_cols = [
     "max_acc", "min_acc", "mean_acc", "std_acc",
     "max_gyro", "min_gyro", "mean_gyro", "std_gyro"
@@ -29,19 +37,23 @@ X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.25, random_state=42, stratify=y
 )
 
+# Random Forest chosen for strong fall detection results
 model = RandomForestClassifier(
     n_estimators=300,
     random_state=42,
     class_weight="balanced"
 )
 
+# train model using training data
 model.fit(X_train, y_train)
 
+# test model on unseen data
 y_pred = model.predict(X_test)
 
 print("\nConfusion Matrix:\n", confusion_matrix(y_test, y_pred))
 print("\nClassification Report:\n")
 print(classification_report(y_test, y_pred, target_names=["normal", "fall"]))
 
+# save trained model for Raspberry Pi use
 joblib.dump({"model": model, "features": feature_cols}, "fall_model.joblib")
 print("\nModel saved as fall_model.joblib")
