@@ -32,30 +32,40 @@ class WindowFeatureExtractor:
     def __init__(self, window_seconds: float = 1.0, sample_rate_hz: float = 10.0):
         self.window_seconds = window_seconds
         self.sample_rate_hz = sample_rate_hz
+
+        # number of readings to keep in one window
         self.maxlen = max(3, int(window_seconds * sample_rate_hz))
+
+        # rolling buffer keeps latest readings only
         self.buf: Deque[dict] = deque(maxlen=self.maxlen)
 
     def add(self, reading: dict) -> None:
+        # add new sensor reading to buffer
         self.buf.append(reading)
 
     def ready(self) -> bool:
+        # enough readings collected for one full window
         return len(self.buf) >= self.maxlen
 
     def _gyro_magnitude(self, r: dict) -> float:
+        # combine x y z gyro into one value
         gx, gy, gz = r["gyro_x"], r["gyro_y"], r["gyro_z"]
         return math.sqrt(gx * gx + gy * gy + gz * gz)
 
     def extract(self, label: str) -> Optional[FeatureRow]:
+        # wait until buffer is full
         if not self.ready():
             return None
 
+        # get acceleration and gyro values from current window
         acc = [r["accel_magnitude"] for r in self.buf]
         gyro = [self._gyro_magnitude(r) for r in self.buf]
 
-        # statistics.stdev requires at least 2 values
+        # standard deviation shows how much movement changes
         std_acc = statistics.stdev(acc) if len(acc) > 1 else 0.0
         std_gyro = statistics.stdev(gyro) if len(gyro) > 1 else 0.0
 
+        # return one ML feature row
         return FeatureRow(
             ts=time.time(),
             label=label,
